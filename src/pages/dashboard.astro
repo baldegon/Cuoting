@@ -1,0 +1,191 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getSupabaseServerClient } from '../lib/supabase';
+
+if (!Astro.locals.user) {
+	return Astro.redirect('/login');
+}
+
+const supabase = getSupabaseServerClient(Astro.cookies);
+const { data: cards, error } = await supabase
+	.from('cards')
+	.select('id, visible_name, brand, issuer_bank, closing_day, due_day')
+	.order('created_at', { ascending: false });
+
+const { data: purchases, error: purchasesError } = await supabase
+	.from('purchases')
+	.select(
+		'id, name, total_amount, purchase_date, installments_count, purchase_allocations(amount, cards(visible_name), installment_plans(installments(status)))'
+	)
+	.order('created_at', { ascending: false });
+
+const purchaseErrorMessage = Astro.url.searchParams.get('purchase_error');
+const purchaseSuccess = Astro.url.searchParams.get('purchase_success') === '1';
+---
+
+<Layout title="Dashboard | Cuoting">
+	<header class="mb-6 flex items-center justify-between">
+		<div>
+			<h1 class="text-2xl font-semibold">Tus tarjetas</h1>
+			<p class="text-sm text-slate-600">Usuario: {Astro.locals.user.email}</p>
+		</div>
+		<form method="post" action="/api/auth/logout">
+			<button type="submit">Salir</button>
+		</form>
+	</header>
+
+	<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
+		<h2 class="mb-4 text-lg font-semibold">Agregar tarjeta</h2>
+		<form method="post" action="/api/cards/create" class="grid gap-3 sm:grid-cols-2">
+			<input name="visible_name" placeholder="Nombre visible" required />
+			<input name="brand" placeholder="Marca (Visa, Master, etc.)" required />
+			<input name="issuer_bank" placeholder="Banco emisor" required />
+			<input name="closing_day" type="number" min="1" max="31" placeholder="Día de cierre" required />
+			<input name="due_day" type="number" min="1" max="31" placeholder="Día de vencimiento" required />
+			<button type="submit" class="sm:col-span-2">Crear tarjeta</button>
+		</form>
+	</section>
+
+	<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
+		<h2 class="mb-4 text-lg font-semibold">Agregar compra en cuotas</h2>
+		{purchaseErrorMessage && <p class="mb-3 text-sm text-red-600">{purchaseErrorMessage}</p>}
+		{purchaseSuccess && <p class="mb-3 text-sm text-emerald-700">Compra creada correctamente.</p>}
+		<form method="post" action="/api/purchases/create" class="space-y-4" id="purchase-form">
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input name="name" placeholder="Nombre de la compra" required />
+				<input name="total_amount" type="number" step="0.01" min="0.01" placeholder="Monto total" required />
+				<input name="purchase_date" type="date" required />
+				<input
+					name="installments_count"
+					type="number"
+					min="1"
+					max="120"
+					placeholder="Cantidad de cuotas"
+					required
+				/>
+			</div>
+
+			<div>
+				<div class="mb-2 flex items-center justify-between">
+					<h3 class="text-sm font-semibold">Asignaciones por tarjeta</h3>
+					<button type="button" id="add-allocation">+ Agregar asignación</button>
+				</div>
+				<div id="allocations" class="space-y-2">
+					<div class="allocation-row grid gap-3 sm:grid-cols-[1fr_140px_auto]">
+						<select name="allocation_card_id" required>
+							<option value="">Tarjeta</option>
+							{cards?.map((card) => (
+								<option value={card.id}>{card.visible_name} · {card.brand}</option>
+							))}
+						</select>
+						<input
+							name="allocation_amount"
+							type="number"
+							step="0.01"
+							min="0.01"
+							placeholder="Monto"
+							required
+						/>
+						<button type="button" class="remove-allocation">Quitar</button>
+					</div>
+				</div>
+				<p class="mt-2 text-xs text-slate-600">La suma de asignaciones debe ser igual al monto total.</p>
+			</div>
+
+			<button type="submit">Crear compra</button>
+		</form>
+	</section>
+
+	<section class="rounded-lg bg-white p-6 shadow-sm">
+		<h2 class="mb-4 text-lg font-semibold">Listado</h2>
+		{error && <p class="text-sm text-red-600">Error cargando tarjetas: {error.message}</p>}
+		{!cards?.length && !error && <p class="text-sm text-slate-600">Todavía no cargaste tarjetas.</p>}
+		<ul class="space-y-3">
+			{cards?.map((card) => (
+				<li class="rounded-md border border-slate-200 p-3">
+					<p class="font-medium">{card.visible_name}</p>
+					<p class="text-sm text-slate-600">{card.brand} · {card.issuer_bank}</p>
+					<p class="text-sm text-slate-600">Cierre: día {card.closing_day} · Vence: día {card.due_day}</p>
+				</li>
+			))}
+		</ul>
+	</section>
+
+	<section class="mt-8 rounded-lg bg-white p-6 shadow-sm">
+		<h2 class="mb-4 text-lg font-semibold">Compras en cuotas</h2>
+		{purchasesError && <p class="text-sm text-red-600">Error cargando compras: {purchasesError.message}</p>}
+		{!purchases?.length && !purchasesError && (
+			<p class="text-sm text-slate-600">Todavía no cargaste compras en cuotas.</p>
+		)}
+		<ul class="space-y-3">
+			{purchases?.map((purchase) => {
+				const allocationSummary =
+					purchase.purchase_allocations
+						?.map((allocation) => {
+							const cardName = allocation.cards?.visible_name ?? 'Tarjeta';
+							return `${cardName}: $${Number(allocation.amount).toFixed(2)}`;
+						})
+						.join(' · ') ?? '';
+
+				const allInstallments =
+					purchase.purchase_allocations?.flatMap(
+						(allocation) => allocation.installment_plans?.flatMap((plan) => plan.installments ?? []) ?? []
+					) ?? [];
+				const remaining = allInstallments.filter((installment) => installment.status !== 'paid').length;
+				const statusLabel = remaining === 0 ? 'completed' : 'active';
+
+				return (
+					<li class="rounded-md border border-slate-200 p-3">
+						<p class="font-medium">{purchase.name}</p>
+						<p class="text-sm text-slate-600">
+							${Number(purchase.total_amount).toFixed(2)} · {purchase.installments_count} cuotas ·
+							 {statusLabel}
+						</p>
+						<p class="text-sm text-slate-600">Fecha: {purchase.purchase_date}</p>
+						<p class="text-sm text-slate-600">{allocationSummary}</p>
+					</li>
+				);
+			})}
+		</ul>
+	</section>
+</Layout>
+
+<script>
+	const allocationsContainer = document.querySelector('#allocations');
+	const addButton = document.querySelector('#add-allocation');
+
+	const refreshRemoveButtons = () => {
+		const rows = allocationsContainer?.querySelectorAll('.allocation-row');
+		rows?.forEach((row, index) => {
+			const removeButton = row.querySelector('.remove-allocation');
+			if (removeButton instanceof HTMLButtonElement) {
+				removeButton.disabled = rows.length === 1;
+				removeButton.onclick = () => {
+					if (rows.length > 1) {
+						row.remove();
+						refreshRemoveButtons();
+					}
+				};
+			}
+		});
+	};
+
+	addButton?.addEventListener('click', () => {
+		const templateRow = allocationsContainer?.querySelector('.allocation-row');
+		if (!templateRow || !allocationsContainer) return;
+
+		const clone = templateRow.cloneNode(true);
+		if (!(clone instanceof HTMLElement)) return;
+
+		clone.querySelectorAll('input, select').forEach((field) => {
+			if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) {
+				field.value = '';
+			}
+		});
+
+		allocationsContainer.appendChild(clone);
+		refreshRemoveButtons();
+	});
+
+	refreshRemoveButtons();
+</script>
