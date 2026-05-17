@@ -32,7 +32,7 @@ Vertical slice inicial con:
     - `supabase/migrations/0001_init_cards.sql`
     - `supabase/migrations/0002_purchases_installments.sql`
 5. En Supabase, habilitar Email/Password en Auth Providers.
-6. Crear un usuario desde Supabase Auth (o flujo de signup futuro).
+6. Registrar usuario desde `/register` (ya no hace falta alta manual en Supabase Auth).
 
 ## Ejecutar
 
@@ -43,8 +43,10 @@ npm run dev
 ## Rutas principales
 
 - `/login` → login con email/password
+- `/register` → registro con email/password
 - `/dashboard` → ruta protegida, formulario de alta de tarjeta y listado
 - `/api/auth/login` → action login
+- `/api/auth/register` → action registro
 - `/api/auth/logout` → action logout
 - `/api/cards/create` → action crear tarjeta
 - `/api/purchases/create` → action crear compra en cuotas con asignaciones multi-tarjeta

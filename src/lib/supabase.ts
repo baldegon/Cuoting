@@ -11,19 +11,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const getSupabaseBrowserClient = () => createClient(supabaseUrl, supabaseAnonKey);
 
-export const getSupabaseServerClient = (cookies: AstroCookies) =>
+export const getSupabaseServerClient = (cookies: AstroCookies, request: Request) =>
 	createServerClient(supabaseUrl, supabaseAnonKey, {
 		cookies: {
 			getAll() {
-				return cookies
-					.headers()
-					.get('cookie')
-					?.split(';')
+				const rawCookieHeader = request.headers.get('cookie') ?? '';
+				if (!rawCookieHeader) return [];
+
+				return rawCookieHeader
+					.split(';')
 					.map((cookie) => {
 						const [name, ...rest] = cookie.trim().split('=');
 						return { name, value: rest.join('=') };
 					})
-					.filter((cookie) => cookie.name && cookie.value) ?? [];
+					.filter((cookie) => cookie.name && cookie.value);
 			},
 			setAll(cookiesToSet) {
 				cookiesToSet.forEach(({ name, value, options }) => {

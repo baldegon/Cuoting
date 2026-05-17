@@ -10,11 +10,11 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 		return redirect('/login?error=Completa+email+y+contraseña');
 	}
 
-	const supabase = getSupabaseServerClient(cookies);
+	const supabase = getSupabaseServerClient(cookies, request);
 	const { error } = await supabase.auth.signInWithPassword({ email, password });
 
 	if (error) {
-		return redirect(`/login?error=${encodeURIComponent(error.message)}`);
+		return redirect('/login?error=Credenciales+inválidas');
 	}
 
 	return redirect('/dashboard');

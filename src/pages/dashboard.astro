@@ -6,7 +6,7 @@ if (!Astro.locals.user) {
 	return Astro.redirect('/login');
 }
 
-const supabase = getSupabaseServerClient(Astro.cookies);
+const supabase = getSupabaseServerClient(Astro.cookies, Astro.request);
 const { data: cards, error } = await supabase
 	.from('cards')
 	.select('id, visible_name, brand, issuer_bank, closing_day, due_day')
@@ -21,6 +21,8 @@ const { data: purchases, error: purchasesError } = await supabase
 
 const purchaseErrorMessage = Astro.url.searchParams.get('purchase_error');
 const purchaseSuccess = Astro.url.searchParams.get('purchase_success') === '1';
+const cardErrorMessage = Astro.url.searchParams.get('card_error');
+const cardSuccess = Astro.url.searchParams.get('card_success') === '1';
 ---
 
 <Layout title="Dashboard | Cuoting">
@@ -36,6 +38,8 @@ const purchaseSuccess = Astro.url.searchParams.get('purchase_success') === '1';
 
 	<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
 		<h2 class="mb-4 text-lg font-semibold">Agregar tarjeta</h2>
+		{cardErrorMessage && <p class="mb-3 text-sm text-red-600">{cardErrorMessage}</p>}
+		{cardSuccess && <p class="mb-3 text-sm text-emerald-700">Tarjeta creada correctamente.</p>}
 		<form method="post" action="/api/cards/create" class="grid gap-3 sm:grid-cols-2">
 			<input name="visible_name" placeholder="Nombre visible" required />
 			<input name="brand" placeholder="Marca (Visa, Master, etc.)" required />

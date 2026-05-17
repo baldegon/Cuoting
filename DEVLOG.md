@@ -114,6 +114,112 @@ En cada bloque de trabajo registrar:
 
 ---
 
+## 2026-05-16 — Endurecimiento P0 de consistencia y auth
+
+### Qué hicimos
+- Se reemplazó la creación de compra por un RPC SQL atómico (`create_purchase_atomic`) para crear compra + asignaciones + planes + cuotas en una sola transacción.
+- Se simplificó `POST /api/purchases/create` para conservar validaciones actuales y delegar la escritura completa al RPC.
+- Se endureció `src/middleware.ts` resolviendo usuario con `supabase.auth.getUser()` y exponiendo `locals.supabase` + `locals.user`.
+- Se corrigió `POST /api/cards/create` para manejar errores de inserción y responder por query params (`card_error`, `card_success`).
+- Se sanitizó login para no exponer mensajes crudos de Supabase (`Credenciales inválidas`).
+- Se actualizó dashboard para mostrar feedback de creación de tarjetas por query params.
+
+### Por qué
+- Evitar estados parciales al fallar inserciones intermedias en compras multi-tabla.
+- Reducir riesgo de confiar solo en sesión local y reforzar resolución de usuario en server.
+- Evitar errores silenciosos y mantener UX de feedback consistente en el dashboard.
+
+### Qué estudiar
+- Si conviene mover más validaciones al RPC (sin duplicar lógica con API).
+- Estrategia de observabilidad mínima para errores de rutas API en producción.
+
+### Qué tocar si retomás
+- `supabase/migrations/0003_purchase_atomic_rpc.sql` → función transaccional de creación de compra.
+- `src/pages/api/purchases/create.ts` → validaciones + llamada RPC.
+- `src/middleware.ts` y `src/types/astro.d.ts` → resolución robusta de usuario y locals tipados.
+- `src/pages/api/cards/create.ts` y `src/pages/dashboard.astro` → feedback explícito de alta de tarjetas.
+- `src/pages/api/auth/login.ts` → mensaje de error sanitizado.
+
+### Próximo paso
+- Agregar logging mínimo de errores API para distinguir fallos de validación vs fallos de infraestructura.
+
+### Bloqueos / notas
+- El RPC requiere ejecutar la nueva migración en DB antes de usar creación de compras.
+
+---
+
+## 2026-05-16 — Fix de crash SSR en `npm run dev`
+
+### Qué hicimos
+- Se diagnosticó el crash de runtime: `TypeError: cookies.getAll is not a function` en `src/lib/supabase.ts`.
+- Se corrigió la lectura de cookies para Supabase SSR usando `request.headers.get('cookie')` como fuente.
+- Se cambió la firma de `getSupabaseServerClient` para recibir `(cookies, request)`.
+- Se actualizaron todos los callsites para pasar `request`:
+  - `src/middleware.ts`
+  - `src/pages/dashboard.astro`
+  - `src/pages/api/auth/login.ts`
+  - `src/pages/api/auth/logout.ts`
+  - `src/pages/api/cards/create.ts`
+  - `src/pages/api/purchases/create.ts`
+- Se validó que `npm run dev` levanta correctamente (puerto alternativo si 4321 está ocupado).
+
+### Por qué
+- La implementación previa asumía una API de `AstroCookies` que no estaba disponible en runtime.
+- Eso provocaba unhandled rejection y rompía el flujo de auth antes de renderizar páginas.
+
+### Qué estudiar
+- Diferencias entre `Astro.cookies` y `Request.headers` según runtime/adaptador.
+- Buenas prácticas de integración entre Astro SSR y `@supabase/ssr`.
+
+### Qué tocar si retomás
+- `src/lib/supabase.ts` → estrategia de extracción/seteo de cookies SSR.
+- `src/middleware.ts` → inicialización de cliente server y resolución de usuario.
+
+### Próximo paso
+- Ejecutar smoke test completo: login, alta tarjeta, alta compra multi-tarjeta, validaciones de error.
+
+### Bloqueos / notas
+- Si `4321` está en uso, Astro levanta en `4322` automáticamente.
+
+---
+
+## 2026-05-16 — Registro de usuarios para usabilidad MVP
+
+### Qué hicimos
+- Se creó la nueva pantalla `/register` con formulario de email, contraseña y confirmación de contraseña.
+- Se implementó `POST /api/auth/register` con validaciones mínimas de servidor:
+  - campos obligatorios
+  - contraseña mínima de 8 caracteres
+  - confirmación de contraseña
+- Se integró `supabase.auth.signUp` con manejo de ambos modos de Auth:
+  - si requiere confirmación por email, redirige a `/login` con mensaje de éxito
+  - si hay sesión inmediata (autoconfirm), redirige a `/dashboard`
+- Se sanitizaron errores del registro para no exponer mensajes internos de Supabase.
+- Se actualizó `/login` para mostrar mensaje `success` por query params y link a registro.
+- Se agregó link de vuelta a login dentro de `/register`.
+- Se actualizó README para documentar el flujo de registro real del MVP.
+
+### Por qué
+- Necesitábamos poder probar el producto end-to-end sin crear usuarios manualmente en Supabase Auth.
+- El flujo de feedback por query params mantiene consistencia con el resto del MVP.
+
+### Qué estudiar
+- Cómo personalizar plantillas de email de confirmación en Supabase Auth para mejorar onboarding.
+- Cuándo conviene forzar confirmación obligatoria vs autoconfirm en ambientes de test y producción.
+
+### Qué tocar si retomás
+- `src/pages/register.astro` → UI de registro y feedback visual.
+- `src/pages/api/auth/register.ts` → validaciones, signUp y redirecciones.
+- `src/pages/login.astro` → feedback `success` + acceso a registro.
+
+### Próximo paso
+- Agregar logging mínimo en `register` para diferenciar fallos de validación vs infraestructura.
+
+### Bloqueos / notas
+- El comportamiento final depende de la configuración de confirmación de email en Supabase (ambos caminos ya cubiertos en el backend).
+
+---
+
 ## Plantilla para próximas entradas
 
 ### Fecha

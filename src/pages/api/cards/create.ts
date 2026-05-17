@@ -27,11 +27,15 @@ export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => 
 		payload.due_day < 1 ||
 		payload.due_day > 31
 	) {
-		return redirect('/dashboard');
+		return redirect('/dashboard?card_error=Datos+de+tarjeta+inválidos');
 	}
 
-	const supabase = getSupabaseServerClient(cookies);
-	await supabase.from('cards').insert(payload);
+	const supabase = getSupabaseServerClient(cookies, request);
+	const { error } = await supabase.from('cards').insert(payload);
 
-	return redirect('/dashboard');
+	if (error) {
+		return redirect('/dashboard?card_error=No+se+pudo+crear+la+tarjeta');
+	}
+
+	return redirect('/dashboard?card_success=1');
 };
