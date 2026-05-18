@@ -44,12 +44,13 @@ npm run dev
 
 - `/login` → login con email/password
 - `/register` → registro con email/password
-- `/dashboard` → ruta protegida, formulario de alta de tarjeta y listado
+- `/dashboard` → ruta protegida, muestra cuotas pendientes y acciones para agregar tarjeta/compra en cuotas
 - `/api/auth/login` → action login
 - `/api/auth/register` → action registro
 - `/api/auth/logout` → action logout
 - `/api/cards/create` → action crear tarjeta
 - `/api/purchases/create` → action crear compra en cuotas con asignaciones multi-tarjeta
+- `/api/installments/mark-paid` → action marcar una cuota puntual como pagada
 
 ## Seguridad
 
@@ -64,3 +65,6 @@ Las tablas `purchases`, `purchase_allocations`, `installment_plans` e `installme
 - Por cada asignación se genera un plan mensual y sus cuotas.
 - Validación de servidor: la suma de asignaciones debe coincidir con el total de la compra.
 - Reparto por cuota: división a 2 decimales y ajuste final en la última cuota de cada plan.
+- En el dashboard se prioriza el listado de cuotas pendientes y se puede marcar cada cuota como pagada.
+- Los formularios de "Agregar tarjeta" y "Agregar compra en cuotas" se abren desde botones de acción en el dashboard.
+- El cambio de estado de cuota es idempotente: si ya está pagada, la acción responde éxito igual.

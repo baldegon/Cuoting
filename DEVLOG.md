@@ -222,6 +222,77 @@ En cada bloque de trabajo registrar:
 
 ## Plantilla para próximas entradas
 
+---
+
+## 2026-05-18 — Marcar cuotas como pagadas (MVP)
+
+### Qué hicimos
+- Se agregó `POST /api/installments/mark-paid` para marcar una cuota por `installment_id`.
+- El endpoint valida usuario autenticado y ownership de cuota con join hasta `purchases.user_id`.
+- Se implementó comportamiento idempotente (`paid` vuelve éxito sin romper flujo).
+- Se agregó policy RLS de `update` para `installments` en migración `0004_installments_update_policy.sql`.
+- Se actualizó `dashboard` para listar cuotas por compra y mostrar botón `Marcar pagada` en pendientes.
+- Se agregó feedback por query params (`installment_success`, `installment_error`) consistente con el resto del dashboard.
+- Se ajustó el hint de estado para reflejar cuotas pendientes reales por compra.
+
+### Por qué
+- El MVP necesitaba cerrar el loop operativo real: no solo crear cuotas, también registrar pagos de cuotas individuales.
+
+### Qué estudiar
+- Cómo agregar cálculo de métricas derivadas (deuda pendiente por tarjeta / por compra) sin sobrecargar el query del dashboard.
+- Si conviene mover la transición `pending -> paid` a un RPC transaccional dedicado para reglas futuras (ej. auditoría).
+
+### Qué tocar si retomás
+- `src/pages/api/installments/mark-paid.ts` → endpoint de pago de cuota.
+- `src/pages/dashboard.astro` → listado detallado de cuotas + acción por cuota.
+- `supabase/migrations/0004_installments_update_policy.sql` → policy de update para cuotas.
+
+### Próximo paso
+- Agregar filtro visual en dashboard para ver solo cuotas pendientes y acelerar carga operativa.
+
+### Bloqueos / notas
+- La migración `0004` debe ejecutarse antes de probar marcado de cuotas, si no el update falla por RLS.
+
+---
+
+## 2026-05-18 — Ajuste UX dashboard: acciones separadas + foco en pendientes
+
+### Qué hicimos
+- Se cambió el dashboard para mostrar dos acciones claras con botones separados: **Agregar tarjeta** y **Agregar compra en cuotas**.
+- Se movieron ambos formularios a modo enfocado por query param (`/dashboard?action=card` y `/dashboard?action=purchase`) para evitar ruido visual permanente.
+- Se dejó el resumen principal del dashboard enfocado en **cuotas pendientes** únicamente.
+- Se reemplazó el listado por compra completa por un listado de pendientes con datos relevantes por cuota:
+  - nombre de compra
+  - resumen de asignación/tarjeta (si existe)
+  - número de cuota
+  - vencimiento
+  - monto
+  - estado pendiente
+  - acción `Marcar pagada`
+- Se mantuvo el feedback por query params y el flujo existente de `mark-paid` sin cambios de API.
+
+### Por qué
+- El usuario pidió reducir fricción: acciones separadas y dashboard más operativo para el día a día.
+- Ver compras completadas junto con pendientes agregaba ruido y ocultaba lo urgente.
+
+### Qué estudiar
+- Si conviene persistir la última vista de acción usada (`action`) para mejorar continuidad de uso.
+- Formato local de fechas/montos para mejorar legibilidad de vencimientos en el listado de pendientes.
+
+### Qué tocar si retomás
+- `src/pages/dashboard.astro` → acciones del dashboard, render condicional de formularios, listado de cuotas pendientes.
+- `README.md` → nota de comportamiento del dashboard.
+
+### Próximo paso
+- Evaluar micro-mejora visual para destacar vencimientos más próximos (sin cambiar backend).
+
+### Bloqueos / notas
+- No hay bloqueos técnicos; cambio limitado a UX/UI de la vista.
+
+---
+
+## Plantilla para próximas entradas
+
 ### Fecha
 
 #### Qué hicimos
