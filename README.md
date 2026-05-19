@@ -26,13 +26,38 @@ Vertical slice inicial con:
    Copy-Item .env.example .env
    ```
 3. Completar `.env` con:
-   - `PUBLIC_SUPABASE_URL`
-   - `PUBLIC_SUPABASE_ANON_KEY`
+    - `PUBLIC_SUPABASE_URL`
+    - `PUBLIC_SUPABASE_ANON_KEY`
 4. Ejecutar la migración SQL en Supabase SQL Editor:
     - `supabase/migrations/0001_init_cards.sql`
     - `supabase/migrations/0002_purchases_installments.sql`
 5. En Supabase, habilitar Email/Password en Auth Providers.
 6. Registrar usuario desde `/register` (ya no hace falta alta manual en Supabase Auth).
+
+## Deploy rápido en Vercel
+
+1. Subí el repo a GitHub.
+2. En Vercel, importá el proyecto sin cambiar framework/build command.
+3. En `Settings > Environment Variables`, cargá:
+   - `PUBLIC_SUPABASE_URL`
+   - `PUBLIC_SUPABASE_ANON_KEY`
+4. Hacé deploy.
+
+## Configuración de Supabase para producción
+
+En `Supabase > Authentication > URL Configuration`:
+
+- `Site URL`: `https://<tu-proyecto>.vercel.app`
+- `Redirect URLs`:
+  - `http://localhost:4321/**`
+  - `https://<tu-proyecto>.vercel.app/**`
+  - si usás previews de Vercel, agregá también la URL preview exacta que vayas a probar
+
+## Gotchas de Auth para la beta
+
+- Este MVP usa solo `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY`, así que esas mismas variables tienen que existir en Vercel.
+- Si `Confirm email` está activo en Supabase, la confirmación/redirección usa `Site URL` por defecto. Si dejás `localhost`, vas a romper el flujo en producción.
+- Si querés la beta MÁS simple para testers, podés desactivar `Confirm email` en `Supabase > Authentication > Providers > Email` y el registro entra directo sin validación extra.
 
 ## Ejecutar
 
