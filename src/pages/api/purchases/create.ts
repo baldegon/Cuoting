@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getSupabaseServerClient } from '../../../lib/supabase';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const purchaseRedirect = (search: string) => `/dashboard?action=purchase&${search}`;
 
 export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => {
 	if (!locals.user) {
@@ -12,7 +13,6 @@ export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => 
 	const name = String(formData.get('name') ?? '').trim();
 	const purchaseDate = String(formData.get('purchase_date') ?? '').trim();
 	const totalAmount = round2(Number.parseFloat(String(formData.get('total_amount') ?? '0')));
-	const installmentsCount = Number.parseInt(String(formData.get('installments_count') ?? '0'), 10);
 	const cardIds = formData
 		.getAll('allocation_card_id')
 		.map((entry) => String(entry).trim())
@@ -20,26 +20,38 @@ export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => 
 	const allocationAmounts = formData
 		.getAll('allocation_amount')
 		.map((entry) => round2(Number.parseFloat(String(entry ?? '0'))));
+	const allocationInstallmentsCounts = formData
+		.getAll('allocation_installments_count')
+		.map((entry) => Number.parseInt(String(entry ?? '0'), 10));
 
 	if (!name || !purchaseDate || !Number.isFinite(totalAmount) || totalAmount <= 0) {
-		return redirect('/dashboard?purchase_error=Datos+inválidos');
+		return redirect(purchaseRedirect('purchase_error=Datos+inválidos'));
 	}
 
-	if (!Number.isInteger(installmentsCount) || installmentsCount < 1 || installmentsCount > 120) {
-		return redirect('/dashboard?purchase_error=Cuotas+inválidas');
-	}
-
-	if (!cardIds.length || cardIds.length !== allocationAmounts.length) {
-		return redirect('/dashboard?purchase_error=Asignaciones+incompletas');
+	if (
+		!cardIds.length ||
+		cardIds.length !== allocationAmounts.length ||
+		cardIds.length !== allocationInstallmentsCounts.length
+	) {
+		return redirect(purchaseRedirect('purchase_error=Asignaciones+incompletas'));
 	}
 
 	if (allocationAmounts.some((amount) => !Number.isFinite(amount) || amount <= 0)) {
-		return redirect('/dashboard?purchase_error=Montos+de+asignación+inválidos');
+		return redirect(purchaseRedirect('purchase_error=Montos+de+asignación+inválidos'));
+	}
+
+	if (
+		allocationInstallmentsCounts.some(
+			(installmentsCount) =>
+				!Number.isInteger(installmentsCount) || installmentsCount < 1 || installmentsCount > 120
+		)
+	) {
+		return redirect(purchaseRedirect('purchase_error=Cuotas+inválidas+en+las+asignaciones'));
 	}
 
 	const allocationsTotal = round2(allocationAmounts.reduce((acc, value) => acc + value, 0));
 	if (allocationsTotal !== totalAmount) {
-		return redirect('/dashboard?purchase_error=Las+asignaciones+deben+sumar+el+total');
+		return redirect(purchaseRedirect('purchase_error=Las+asignaciones+deben+sumar+el+total'));
 	}
 
 	const uniqueCardIds = [...new Set(cardIds)];
@@ -52,21 +64,21 @@ export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => 
 		.eq('user_id', locals.user.id);
 
 	if (cardsError || !validCards || validCards.length !== uniqueCardIds.length) {
-		return redirect('/dashboard?purchase_error=Tarjetas+inválidas+para+la+cuenta');
+		return redirect(purchaseRedirect('purchase_error=Tarjetas+inválidas+para+la+cuenta'));
 	}
 
 	const { error: purchaseError } = await supabase.rpc('create_purchase_atomic', {
 		p_name: name,
 		p_purchase_date: purchaseDate,
 		p_total_amount: totalAmount,
-		p_installments_count: installmentsCount,
 		p_card_ids: cardIds,
-		p_allocation_amounts: allocationAmounts
+		p_allocation_amounts: allocationAmounts,
+		p_allocation_installments_counts: allocationInstallmentsCounts
 	});
 
 	if (purchaseError) {
-		return redirect('/dashboard?purchase_error=No+se+pudo+crear+la+compra');
+		return redirect(purchaseRedirect('purchase_error=No+se+pudo+crear+la+compra'));
 	}
 
-	return redirect('/dashboard?purchase_success=1');
+	return redirect(purchaseRedirect('purchase_success=1'));
 };

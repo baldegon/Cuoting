@@ -17,6 +17,15 @@ En cada bloque de trabajo registrar:
 - qué conviene estudiar
 - qué archivos mirar primero al retomar
 
+## Regla nueva de aprendizaje
+
+- Cada bug importante o situación con mucho valor técnico se anota DIRECTAMENTE acá.
+- No solo como "se arregló", sino como **caso de estudio**:
+  - qué lo rompió
+  - qué supuesto era incorrecto
+  - cómo detectarlo antes la próxima vez
+  - qué concepto de software engineering conviene repasar
+
 ---
 
 ## 2026-05-13 — Arranque del proyecto
@@ -221,6 +230,39 @@ En cada bloque de trabajo registrar:
 ---
 
 ## Plantilla para próximas entradas
+
+---
+
+## 2026-05-19 — Caso de estudio: crash SSR del dashboard en producción
+
+### Qué hicimos
+- Se diagnosticó el HTTP 500 real en Vercel dentro de `/dashboard`.
+- Se confirmó con logs de producción que el error era: `TypeError: Reduce of empty array with no initial value`.
+- Se identificó la causa en `src/pages/dashboard.astro`: `purchases?.reduce(...)` estaba escrito sin `initialValue`.
+- Se corrigió el cálculo de `pendingPurchases` usando `(purchases ?? []).reduce(..., [])`.
+- Se corrigió además la lectura de `allocation.cards`, porque TypeScript lo infería como array y no como objeto único.
+- Se verificó que el build vuelve a compilar sin errores.
+
+### Por qué
+- En producción un usuario podía entrar al dashboard sin compras cargadas.
+- En ese caso, `reduce` sobre array vacío rompía TODO el render SSR.
+- Además el tipado incorrecto de `cards` estaba generando ruido real del IDE y podía ocultar nombres de tarjeta en la UI.
+
+### Qué estudiar
+- Diferencia entre `array.reduce(fn)` y `array.reduce(fn, initialValue)`.
+- Por qué SSR falla más fuerte que una vista cliente cuando una transformación explota antes de renderizar.
+- Cómo leer errores en cascada de TypeScript y detectar la causa raíz en vez de perseguir síntomas.
+- Normalización de shape de datos anidados en respuestas de Supabase.
+
+### Qué tocar si retomás
+- `src/pages/dashboard.astro` → cálculo de `pendingPurchases`, lectura de relaciones anidadas y render de cuotas pendientes.
+
+### Próximo paso
+- Seguir revisando el dashboard con datos reales de usuarios para detectar más supuestos frágiles antes de abrir más la beta.
+
+### Bloqueos / notas
+- Este fue un bug gordo y vale como referencia de aprendizaje: el problema no era "la lógica de negocio" sino un supuesto inválido sobre datos vacíos.
+- Lección clave: si una transformación de arrays alimenta SSR, siempre asumir que puede venir vacío.
 
 ---
 

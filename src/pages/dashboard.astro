@@ -15,7 +15,7 @@ const { data: cards, error } = await supabase
 const { data: purchases, error: purchasesError } = await supabase
 	.from('purchases')
 	.select(
-		'id, name, total_amount, purchase_date, installments_count, purchase_allocations(amount, cards(visible_name), installment_plans(installments(id, installment_number, due_date, amount, status, paid_at)))'
+		'id, name, total_amount, purchase_date, installments_count, purchase_allocations(amount, cards(visible_name), installment_plans(installments_count, installments(id, installment_number, due_date, amount, status, paid_at)))'
 	)
 	.order('created_at', { ascending: false });
 
@@ -50,47 +50,64 @@ type PendingPurchaseSummary = {
 	pendingInstallmentsCount: number;
 };
 
-const pendingPurchases =
-	purchases
-		?.reduce<PendingPurchaseSummary[]>((summaries, purchase) => {
-			const allocationSummary =
-				purchase.purchase_allocations
-					?.map((allocation) => {
-						const cardName = allocation.cards?.visible_name ?? 'Tarjeta';
-						return `${cardName}: ${formatCurrency(allocation.amount)}`;
-					})
-					.join(' · ') ?? '';
+const pendingPurchases = (purchases ?? []).reduce<PendingPurchaseSummary[]>((summaries, purchase) => {
+	const allocations = Array.isArray(purchase.purchase_allocations) ? purchase.purchase_allocations : [];
 
-			const allInstallments =
-				purchase.purchase_allocations?.flatMap(
-					(allocation) => allocation.installment_plans?.flatMap((plan) => plan.installments ?? []) ?? []
-				) ?? [];
+	const allocationSummary = allocations
+		.map((allocation) => {
+			const card = Array.isArray(allocation.cards) ? allocation.cards[0] : allocation.cards;
+			const cardName = card?.visible_name ?? 'Tarjeta';
+			const plans = Array.isArray(allocation.installment_plans)
+				? allocation.installment_plans
+				: allocation.installment_plans
+					? [allocation.installment_plans]
+					: [];
+			const installmentsCount = plans[0]?.installments_count;
+			const installmentsLabel =
+				typeof installmentsCount === 'number'
+					? ` · ${installmentsCount} cuota${installmentsCount === 1 ? '' : 's'}`
+					: '';
 
-			const pendingInstallments = allInstallments
-				.filter((installment) => installment.status !== 'paid')
-				.sort((a, b) => {
-					const dueDateDiff = a.due_date.localeCompare(b.due_date);
-					if (dueDateDiff !== 0) return dueDateDiff;
-
-					return a.installment_number - b.installment_number;
-				});
-
-			const nextPendingInstallment = pendingInstallments[0];
-
-			if (!nextPendingInstallment) {
-				return summaries;
-			}
-
-			summaries.push({
-				purchaseName: purchase.name,
-				allocationSummary,
-				nextPendingInstallment,
-				pendingInstallmentsCount: pendingInstallments.length
-			});
-
-			return summaries;
+			return `${cardName}: ${formatCurrency(allocation.amount)}${installmentsLabel}`;
 		})
-		 ?? [];
+		.join(' · ');
+
+	const allInstallments = allocations.flatMap(
+		(allocation) => {
+			const plans = Array.isArray(allocation.installment_plans)
+				? allocation.installment_plans
+				: allocation.installment_plans
+					? [allocation.installment_plans]
+					: [];
+
+			return plans.flatMap((plan) => plan.installments ?? []);
+		}
+	);
+
+	const pendingInstallments = allInstallments
+		.filter((installment) => installment.status !== 'paid')
+		.sort((a, b) => {
+			const dueDateDiff = a.due_date.localeCompare(b.due_date);
+			if (dueDateDiff !== 0) return dueDateDiff;
+
+			return a.installment_number - b.installment_number;
+		});
+
+	const nextPendingInstallment = pendingInstallments[0];
+
+	if (!nextPendingInstallment) {
+		return summaries;
+	}
+
+	summaries.push({
+		purchaseName: purchase.name,
+		allocationSummary,
+		nextPendingInstallment,
+		pendingInstallmentsCount: pendingInstallments.length
+	});
+
+	return summaries;
+}, []);
 
 pendingPurchases.sort(
 	(a, b) => a.nextPendingInstallment.due_date.localeCompare(b.nextPendingInstallment.due_date)
@@ -147,6 +164,7 @@ pendingPurchases.sort(
 					<input name="name" placeholder="Nombre de la compra" required />
 					<input
 						name="total_amount"
+						id="purchase-total-amount"
 						type="number"
 						step="0.01"
 						min="0.01"
@@ -154,14 +172,6 @@ pendingPurchases.sort(
 						required
 					/>
 					<input name="purchase_date" type="date" required />
-					<input
-						name="installments_count"
-						type="number"
-						min="1"
-						max="120"
-						placeholder="Cantidad de cuotas"
-						required
-					/>
 				</div>
 
 				<div>
@@ -169,8 +179,12 @@ pendingPurchases.sort(
 						<h3 class="text-sm font-semibold">Asignaciones por tarjeta</h3>
 						<button type="button" id="add-allocation">+ Agregar asignación</button>
 					</div>
+					<p class="mb-3 text-sm text-slate-600">
+						En cada fila cargá el <strong>monto total que va en esa tarjeta</strong> y en cuántas cuotas se
+						divide. No pongas el valor de una sola cuota.
+					</p>
 					<div id="allocations" class="space-y-2">
-						<div class="allocation-row grid gap-3 sm:grid-cols-[1fr_140px_auto]">
+						<div class="allocation-row grid gap-3 sm:grid-cols-[1fr_140px_140px_auto]">
 							<select name="allocation_card_id" required>
 								<option value="">Tarjeta</option>
 								{cards?.map((card) => (
@@ -182,13 +196,28 @@ pendingPurchases.sort(
 								type="number"
 								step="0.01"
 								min="0.01"
-								placeholder="Monto"
+								placeholder="Monto total en esta tarjeta"
+								required
+							/>
+							<input
+								name="allocation_installments_count"
+								type="number"
+								min="1"
+								max="120"
+								placeholder="Cantidad de cuotas"
 								required
 							/>
 							<button type="button" class="remove-allocation">Quitar</button>
 						</div>
 					</div>
-					<p class="mt-2 text-xs text-slate-600">La suma de asignaciones debe ser igual al monto total.</p>
+					<div class="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+						<p><strong>Total de la compra:</strong> <span id="purchase-total-preview">$0.00</span></p>
+						<p><strong>Total asignado:</strong> <span id="allocations-total-preview">$0.00</span></p>
+						<p><strong>Diferencia:</strong> <span id="allocations-difference-preview">$0.00</span></p>
+					</div>
+					<p class="mt-2 text-xs text-slate-600">
+						La suma de los montos asignados debe ser igual al monto total de la compra.
+					</p>
 				</div>
 
 				<button type="submit">Crear compra</button>
@@ -249,6 +278,39 @@ pendingPurchases.sort(
 <script>
 	const allocationsContainer = document.querySelector('#allocations');
 	const addButton = document.querySelector('#add-allocation');
+	const totalAmountInput = document.querySelector('#purchase-total-amount');
+	const purchaseTotalPreview = document.querySelector('#purchase-total-preview');
+	const allocationsTotalPreview = document.querySelector('#allocations-total-preview');
+	const allocationsDifferencePreview = document.querySelector('#allocations-difference-preview');
+
+	const formatCurrency = (value) =>
+		new Intl.NumberFormat('es-AR', {
+			style: 'currency',
+			currency: 'ARS'
+		}).format(value);
+
+	const parseAmount = (value) => {
+		const parsed = Number.parseFloat(String(value ?? '0'));
+		return Number.isFinite(parsed) ? parsed : 0;
+	};
+
+	const refreshAllocationSummary = () => {
+		const totalAmount =
+			totalAmountInput instanceof HTMLInputElement ? parseAmount(totalAmountInput.value) : 0;
+
+		const allocatedAmount = allocationsContainer
+			? Array.from(allocationsContainer.querySelectorAll('input[name="allocation_amount"]')).reduce(
+					(sum, field) => sum + (field instanceof HTMLInputElement ? parseAmount(field.value) : 0),
+					0
+				)
+			: 0;
+
+		const difference = totalAmount - allocatedAmount;
+
+		if (purchaseTotalPreview) purchaseTotalPreview.textContent = formatCurrency(totalAmount);
+		if (allocationsTotalPreview) allocationsTotalPreview.textContent = formatCurrency(allocatedAmount);
+		if (allocationsDifferencePreview) allocationsDifferencePreview.textContent = formatCurrency(difference);
+	};
 
 	const refreshRemoveButtons = () => {
 		const rows = allocationsContainer?.querySelectorAll('.allocation-row');
@@ -260,6 +322,7 @@ pendingPurchases.sort(
 					if (rows.length > 1) {
 						row.remove();
 						refreshRemoveButtons();
+						refreshAllocationSummary();
 					}
 				};
 			}
@@ -281,7 +344,12 @@ pendingPurchases.sort(
 
 		allocationsContainer.appendChild(clone);
 		refreshRemoveButtons();
+		refreshAllocationSummary();
 	});
 
+	totalAmountInput?.addEventListener('input', refreshAllocationSummary);
+	allocationsContainer?.addEventListener('input', refreshAllocationSummary);
+
 	refreshRemoveButtons();
+	refreshAllocationSummary();
 </script>

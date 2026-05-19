@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getSupabaseServerClient } from '../../../lib/supabase';
 
 const toDay = (value: FormDataEntryValue | null) => Number.parseInt(String(value ?? ''), 10);
+const cardRedirect = (search: string) => `/dashboard?action=card&${search}`;
 
 export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => {
 	if (!locals.user) {
@@ -27,15 +28,15 @@ export const POST: APIRoute = async ({ request, cookies, locals, redirect }) => 
 		payload.due_day < 1 ||
 		payload.due_day > 31
 	) {
-		return redirect('/dashboard?card_error=Datos+de+tarjeta+inválidos');
+		return redirect(cardRedirect('card_error=Datos+de+tarjeta+inválidos'));
 	}
 
 	const supabase = getSupabaseServerClient(cookies, request);
 	const { error } = await supabase.from('cards').insert(payload);
 
 	if (error) {
-		return redirect('/dashboard?card_error=No+se+pudo+crear+la+tarjeta');
+		return redirect(cardRedirect('card_error=No+se+pudo+crear+la+tarjeta'));
 	}
 
-	return redirect('/dashboard?card_success=1');
+	return redirect(cardRedirect('card_success=1'));
 };
