@@ -27,14 +27,37 @@ const installmentErrorMessage = Astro.url.searchParams.get('installment_error');
 const installmentSuccess = Astro.url.searchParams.get('installment_success') === '1';
 const actionMode = Astro.url.searchParams.get('action');
 
-const pendingInstallments =
+const formatCurrency = (amount: number | string) => `$${Number(amount).toFixed(2)}`;
+
+const formatDate = (date: string) =>
+	new Intl.DateTimeFormat('es-AR', {
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric'
+	}).format(new Date(`${date}T00:00:00`));
+
+type PendingPurchaseSummary = {
+	purchaseName: string;
+	allocationSummary: string;
+	nextPendingInstallment: {
+		id: string;
+		installment_number: number;
+		due_date: string;
+		amount: number;
+		status: string;
+		paid_at: string | null;
+	};
+	pendingInstallmentsCount: number;
+};
+
+const pendingPurchases =
 	purchases
-		?.flatMap((purchase) => {
+		?.reduce<PendingPurchaseSummary[]>((summaries, purchase) => {
 			const allocationSummary =
 				purchase.purchase_allocations
 					?.map((allocation) => {
 						const cardName = allocation.cards?.visible_name ?? 'Tarjeta';
-						return `${cardName}: $${Number(allocation.amount).toFixed(2)}`;
+						return `${cardName}: ${formatCurrency(allocation.amount)}`;
 					})
 					.join(' · ') ?? '';
 
@@ -43,15 +66,35 @@ const pendingInstallments =
 					(allocation) => allocation.installment_plans?.flatMap((plan) => plan.installments ?? []) ?? []
 				) ?? [];
 
-			return allInstallments
+			const pendingInstallments = allInstallments
 				.filter((installment) => installment.status !== 'paid')
-				.map((installment) => ({
-					purchaseName: purchase.name,
-					allocationSummary,
-					installment
-				}));
+				.sort((a, b) => {
+					const dueDateDiff = a.due_date.localeCompare(b.due_date);
+					if (dueDateDiff !== 0) return dueDateDiff;
+
+					return a.installment_number - b.installment_number;
+				});
+
+			const nextPendingInstallment = pendingInstallments[0];
+
+			if (!nextPendingInstallment) {
+				return summaries;
+			}
+
+			summaries.push({
+				purchaseName: purchase.name,
+				allocationSummary,
+				nextPendingInstallment,
+				pendingInstallmentsCount: pendingInstallments.length
+			});
+
+			return summaries;
 		})
-		.sort((a, b) => a.installment.due_date.localeCompare(b.installment.due_date)) ?? [];
+		 ?? [];
+
+pendingPurchases.sort(
+	(a, b) => a.nextPendingInstallment.due_date.localeCompare(b.nextPendingInstallment.due_date)
+);
 ---
 
 <Layout title="Dashboard | Cuoting">
@@ -173,25 +216,32 @@ const pendingInstallments =
 		{installmentErrorMessage && <p class="mb-3 text-sm text-red-600">{installmentErrorMessage}</p>}
 		{installmentSuccess && <p class="mb-3 text-sm text-emerald-700">Cuota marcada como pagada.</p>}
 		{purchasesError && <p class="text-sm text-red-600">Error cargando compras: {purchasesError.message}</p>}
-		{!pendingInstallments.length && !purchasesError && (
+		{!pendingPurchases.length && !purchasesError && (
 			<p class="text-sm text-slate-600">No tenés cuotas pendientes.</p>
 		)}
 		<ul class="space-y-3">
-			{pendingInstallments.map(({ purchaseName, allocationSummary, installment }) => (
+			{pendingPurchases.map(
+				({ purchaseName, allocationSummary, nextPendingInstallment, pendingInstallmentsCount }) => (
 				<li class="rounded-md border border-slate-200 p-3">
 					<p class="font-medium">{purchaseName}</p>
 					{allocationSummary && <p class="text-sm text-slate-600">{allocationSummary}</p>}
 					<p class="text-sm text-slate-600">
-						Cuota #{installment.installment_number} · vence {installment.due_date}
+						Próxima cuota #{nextPendingInstallment.installment_number} · vence{' '}
+						{formatDate(nextPendingInstallment.due_date)}
 					</p>
-					<p class="text-sm text-slate-600">Monto: ${Number(installment.amount).toFixed(2)}</p>
+					<p class="text-sm text-slate-600">Monto: {formatCurrency(nextPendingInstallment.amount)}</p>
+					<p class="text-sm text-slate-600">
+						Quedan {pendingInstallmentsCount} cuota{pendingInstallmentsCount === 1 ? '' : 's'} pendiente
+						{pendingInstallmentsCount === 1 ? '' : 's'}.
+					</p>
 					<p class="text-sm text-amber-700">Estado: pendiente</p>
 					<form method="post" action="/api/installments/mark-paid" class="mt-2">
-						<input type="hidden" name="installment_id" value={installment.id} />
-						<button type="submit">Marcar pagada</button>
+						<input type="hidden" name="installment_id" value={nextPendingInstallment.id} />
+						<button type="submit">Marcar próxima cuota como pagada</button>
 					</form>
 				</li>
-			))}
+				)
+			)}
 		</ul>
 	</section>
 </Layout>
