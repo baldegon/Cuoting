@@ -32,6 +32,14 @@
       "sessions": 3,
       "memories": 17,
       "prompts": 21
+    },
+    {
+      "id": "d85ff06c",
+      "created_by": "baldegondev",
+      "created_at": "2026-05-20T01:32:04Z",
+      "sessions": 8,
+      "memories": 23,
+      "prompts": 37
     }
   ]
 }

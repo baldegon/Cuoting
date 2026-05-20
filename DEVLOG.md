@@ -333,6 +333,47 @@ En cada bloque de trabajo registrar:
 
 ---
 
+## 2026-05-19 — Endurecimiento del flujo de compras y salida a testers
+
+### Qué hicimos
+- Se corrigió un crash de producción en `/dashboard` causado por `reduce` sin `initialValue` cuando `purchases` venía vacío.
+- Se normalizó la lectura de `allocation.cards` en `dashboard.astro` para evitar errores de tipado y fallbacks engañosos.
+- Se implementó soporte de **cuotas por asignación/tarjeta**: cada fila de compra ahora define tarjeta, monto total en esa tarjeta y cantidad de cuotas.
+- Se agregó la migración `0005_purchase_atomic_rpc_installments_per_allocation.sql` para que el RPC genere planes y cuotas por asignación.
+- Se corrigieron redirects en `cards/create` y `purchases/create` para preservar `action=card|purchase` y mostrar mensajes de error/éxito dentro del formulario correcto.
+- Se aclaró la UX del formulario de compra con texto explícito y resumen en vivo de:
+  - total de compra
+  - total asignado
+  - diferencia
+- Se dejó documentado como sidequest futuro un modelo alternativo de input por **valor de cuota + cantidad**, pero sin priorizarlo ahora.
+- Se redeployó el proyecto y quedó funcionando correctamente para empezar pruebas con clientes y familiares.
+
+### Por qué
+- El dashboard ya estaba listo para testers solo si dejaba de romper con usuarios sin compras.
+- La compra multi-tarjeta necesitaba soportar casos reales como Visa en 3 cuotas y Mastercard en 6.
+- Los mensajes escondidos en la URL estaban rompiendo la experiencia de testeo y confundiendo al usuario.
+- El campo `Monto` era ambiguo y llevaba a cargar valor de cuota en vez de monto total por tarjeta.
+
+### Qué estudiar
+- Cómo diseñar formularios financieros con semántica explícita para evitar errores de interpretación.
+- Cuándo conviene cambiar el modelo mental del input (total por tarjeta vs valor de cuota) y cuándo alcanza con mejor UX/copy.
+- Qué validaciones deben vivir en frontend para guiar al usuario y cuáles deben mantenerse sí o sí en backend.
+
+### Qué tocar si retomás
+- `src/pages/dashboard.astro` → robustez SSR, cálculo de pendientes, formulario de compra, copy de ayuda y resumen en vivo.
+- `src/pages/api/purchases/create.ts` → validación de asignaciones y redirects con `action=purchase`.
+- `src/pages/api/cards/create.ts` → redirects con `action=card`.
+- `supabase/migrations/0005_purchase_atomic_rpc_installments_per_allocation.sql` → cuotas por asignación/tarjeta.
+
+### Próximo paso
+- Distribuir el MVP a clientes y familiares, observar uso real y recolectar feedback sobre claridad del dashboard y del flujo de compras.
+
+### Bloqueos / notas
+- Sidequest diferido: evaluar si en el futuro conviene cargar compras por valor de cuota mensual en vez de monto total por tarjeta.
+- Punto de claridad pendiente para más adelante: en cuotas pendientes, el texto `Monto` hoy representa el valor de la próxima cuota individual y podría etiquetarse mejor.
+
+---
+
 ## Plantilla para próximas entradas
 
 ### Fecha
