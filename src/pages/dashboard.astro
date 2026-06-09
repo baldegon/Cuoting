@@ -112,35 +112,71 @@ const pendingPurchases = (purchases ?? []).reduce<PendingPurchaseSummary[]>((sum
 pendingPurchases.sort(
 	(a, b) => a.nextPendingInstallment.due_date.localeCompare(b.nextPendingInstallment.due_date)
 );
+
+// Totals for summary card
+const allPendingInstallments = (purchases ?? []).flatMap((purchase) => {
+	const allocations = Array.isArray(purchase.purchase_allocations) ? purchase.purchase_allocations : [];
+	return allocations.flatMap((allocation) => {
+		const plans = Array.isArray(allocation.installment_plans)
+			? allocation.installment_plans
+			: allocation.installment_plans
+				? [allocation.installment_plans]
+				: [];
+		return plans.flatMap((plan) => plan.installments ?? []);
+	}).filter((inst) => inst.status !== 'paid');
+});
+
+const totalPendingCount = allPendingInstallments.length;
+const totalPendingAmount = allPendingInstallments.reduce((sum, inst) => sum + Number(inst.amount), 0);
 ---
 
 <Layout title="Dashboard | Cuoting">
-	<header class="mb-6 flex items-center justify-between">
+	<header class="mb-8 flex items-center justify-between border-b border-slate-200 pb-4">
 		<div>
-			<h1 class="text-2xl font-semibold">Tus tarjetas</h1>
-			<p class="text-sm text-slate-600">Usuario: {Astro.locals.user.email}</p>
+			<h1 class="text-2xl font-semibold text-[#1A1A1A]">Cuoting</h1>
+			<p class="text-sm font-medium text-[#1A1A1A]/60">{Astro.locals.user.email}</p>
 		</div>
 		<form method="post" action="/api/auth/logout">
-			<button type="submit">Salir</button>
+			<button type="submit" class="cursor-pointer rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A]/60 hover:bg-[#EBE4DA]">Salir</button>
 		</form>
 	</header>
 
+	<!-- Resumen -->
+	<section class="mb-8 rounded-xl bg-gradient-to-br from-[#0F2C59] to-[#1A3A6B] p-6 text-white shadow-md">
+		<div class="grid gap-6 sm:grid-cols-3">
+			<div>
+				<p class="text-sm font-medium text-[#DF9F28]/80">Cuotas pendientes</p>
+				<p class="mt-1 text-3xl font-bold">{totalPendingCount}</p>
+			</div>
+			<div>
+				<p class="text-sm font-medium text-[#DF9F28]/80">Total comprometido</p>
+				<p class="mt-1 text-3xl font-bold">{formatCurrency(totalPendingAmount)}</p>
+			</div>
+			<div>
+				<p class="text-sm font-medium text-[#DF9F28]/80">Próximo vencimiento</p>
+				<p class="mt-1 text-3xl font-bold">
+					{pendingPurchases.length > 0
+						? formatDate(pendingPurchases[0].nextPendingInstallment.due_date)
+						: '—'}
+				</p>
+			</div>
+		</div>
+	</section>
+
 	<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
-		<h2 class="mb-4 text-lg font-semibold">Acciones</h2>
-		<div class="flex flex-wrap gap-2">
-			<a href="/dashboard?action=card" role="button">Agregar tarjeta</a>
-			<a href="/dashboard?action=purchase" role="button">Agregar compra en cuotas</a>
+		<h2 class="mb-4 text-lg font-semibold text-[#1A1A1A]">Acciones</h2>
+		<div class="flex flex-wrap gap-3">
+			<a href="/dashboard?action=card" role="button" class="inline-block cursor-pointer rounded-lg bg-[#DF9F28] px-5 py-2.5 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Agregar tarjeta</a>
+			<a href="/dashboard?action=purchase" role="button" class="inline-block cursor-pointer rounded-lg bg-[#DF9F28] px-5 py-2.5 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Agregar compra en cuotas</a>
 			{actionMode && (
-				<a href="/dashboard" role="button" class="bg-slate-200 text-slate-900 hover:bg-slate-300"
-					>Volver al resumen</a
-				>
+				<a href="/dashboard" role="button" class="inline-block cursor-pointer rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-[#1A1A1A]/60 hover:bg-[#EBE4DA]">Volver al resumen</a>
 			)}
 		</div>
 	</section>
 
 	{actionMode === 'card' && (
 		<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
-			<h2 class="mb-4 text-lg font-semibold">Agregar tarjeta</h2>
+			<h2 class="mb-4 text-lg font-semibold text-[#1A1A1A]">Agregar tarjeta</h2>
 			{cardErrorMessage && <p class="mb-3 text-sm text-red-600">{cardErrorMessage}</p>}
 			{cardSuccess && <p class="mb-3 text-sm text-emerald-700">Tarjeta creada correctamente.</p>}
 			<form method="post" action="/api/cards/create" class="grid gap-3 sm:grid-cols-2">
@@ -149,14 +185,14 @@ pendingPurchases.sort(
 				<input name="issuer_bank" placeholder="Banco emisor" required />
 				<input name="closing_day" type="number" min="1" max="31" placeholder="Día de cierre" required />
 				<input name="due_day" type="number" min="1" max="31" placeholder="Día de vencimiento" required />
-				<button type="submit" class="sm:col-span-2">Crear tarjeta</button>
+				<button type="submit" class="sm:col-span-2 cursor-pointer rounded-lg bg-[#DF9F28] px-5 py-2.5 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Crear tarjeta</button>
 			</form>
 		</section>
 	)}
 
 	{actionMode === 'purchase' && (
 		<section class="mb-8 rounded-lg bg-white p-6 shadow-sm">
-			<h2 class="mb-4 text-lg font-semibold">Agregar compra en cuotas</h2>
+			<h2 class="mb-4 text-lg font-semibold text-[#1A1A1A]">Agregar compra en cuotas</h2>
 			{purchaseErrorMessage && <p class="mb-3 text-sm text-red-600">{purchaseErrorMessage}</p>}
 			{purchaseSuccess && <p class="mb-3 text-sm text-emerald-700">Compra creada correctamente.</p>}
 			<form method="post" action="/api/purchases/create" class="space-y-4" id="purchase-form">
@@ -176,10 +212,10 @@ pendingPurchases.sort(
 
 				<div>
 					<div class="mb-2 flex items-center justify-between">
-						<h3 class="text-sm font-semibold">Asignaciones por tarjeta</h3>
-						<button type="button" id="add-allocation">+ Agregar asignación</button>
+						<h3 class="text-sm font-semibold text-[#1A1A1A]">Asignaciones por tarjeta</h3>
+						<button type="button" id="add-allocation" class="cursor-pointer rounded-lg border border-[#DF9F28]/30 bg-[#DF9F28]/10 px-4 py-2 text-sm font-semibold text-[#0F2C59] hover:bg-[#DF9F28]/20">+ Agregar asignación</button>
 					</div>
-					<p class="mb-3 text-sm text-slate-600">
+					<p class="mb-3 text-sm font-medium text-[#1A1A1A]/70">
 						En cada fila cargá el <strong>monto total que va en esa tarjeta</strong> y en cuántas cuotas se
 						divide. No pongas el valor de una sola cuota.
 					</p>
@@ -207,66 +243,67 @@ pendingPurchases.sort(
 								placeholder="Cantidad de cuotas"
 								required
 							/>
-							<button type="button" class="remove-allocation">Quitar</button>
+							<button type="button" class="remove-allocation cursor-pointer rounded-lg border border-[#0F2C59]/20 bg-[#0F2C59]/5 px-4 py-2 text-sm font-semibold text-[#0F2C59] hover:bg-[#0F2C59]/10">Quitar</button>
 						</div>
 					</div>
-					<div class="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+					<div class="mt-3 rounded-md bg-slate-50 p-3 text-sm font-medium text-[#1A1A1A]/70">
 						<p><strong>Total de la compra:</strong> <span id="purchase-total-preview">$0.00</span></p>
 						<p><strong>Total asignado:</strong> <span id="allocations-total-preview">$0.00</span></p>
 						<p><strong>Diferencia:</strong> <span id="allocations-difference-preview">$0.00</span></p>
 					</div>
-					<p class="mt-2 text-xs text-slate-600">
+					<p class="mt-2 text-xs font-medium text-[#1A1A1A]/50">
 						La suma de los montos asignados debe ser igual al monto total de la compra.
 					</p>
 				</div>
 
-				<button type="submit">Crear compra</button>
+					<button type="submit" class="cursor-pointer rounded-lg bg-[#DF9F28] px-5 py-2.5 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Crear compra</button>
 			</form>
 		</section>
 	)}
 
 	<section class="rounded-lg bg-white p-6 shadow-sm">
-		<h2 class="mb-4 text-lg font-semibold">Listado</h2>
+		<h2 class="mb-4 text-lg font-semibold text-[#1A1A1A]">Tus tarjetas</h2>
 		{error && <p class="text-sm text-red-600">Error cargando tarjetas: {error.message}</p>}
-		{!cards?.length && !error && <p class="text-sm text-slate-600">Todavía no cargaste tarjetas.</p>}
+		{!cards?.length && !error && <p class="text-sm font-medium text-[#1A1A1A]/50">Todavía no cargaste tarjetas.</p>}
 		<ul class="space-y-3">
 			{cards?.map((card) => (
-				<li class="rounded-md border border-slate-200 p-3">
-					<p class="font-medium">{card.visible_name}</p>
-					<p class="text-sm text-slate-600">{card.brand} · {card.issuer_bank}</p>
-					<p class="text-sm text-slate-600">Cierre: día {card.closing_day} · Vence: día {card.due_day}</p>
+				<li class="rounded-md border border-slate-100 bg-slate-50 p-4">
+					<p class="font-medium text-[#1A1A1A]">{card.visible_name}</p>
+					<p class="text-sm font-medium text-[#1A1A1A]/60">{card.brand} · {card.issuer_bank}</p>
+					<p class="text-sm font-medium text-[#1A1A1A]/60">Cierre: día {card.closing_day} · Vence: día {card.due_day}</p>
 				</li>
 			))}
 		</ul>
 	</section>
 
 	<section class="mt-8 rounded-lg bg-white p-6 shadow-sm">
-		<h2 class="mb-4 text-lg font-semibold">Cuotas pendientes</h2>
+		<h2 class="mb-4 text-lg font-semibold text-[#1A1A1A]">Cuotas pendientes</h2>
 		{installmentErrorMessage && <p class="mb-3 text-sm text-red-600">{installmentErrorMessage}</p>}
 		{installmentSuccess && <p class="mb-3 text-sm text-emerald-700">Cuota marcada como pagada.</p>}
 		{purchasesError && <p class="text-sm text-red-600">Error cargando compras: {purchasesError.message}</p>}
 		{!pendingPurchases.length && !purchasesError && (
-			<p class="text-sm text-slate-600">No tenés cuotas pendientes.</p>
+			<p class="text-sm font-medium text-[#1A1A1A]/50">No tenés cuotas pendientes. ¡Todo al día!</p>
 		)}
-		<ul class="space-y-3">
+		<ul class="space-y-4">
 			{pendingPurchases.map(
 				({ purchaseName, allocationSummary, nextPendingInstallment, pendingInstallmentsCount }) => (
-				<li class="rounded-md border border-slate-200 p-3">
-					<p class="font-medium">{purchaseName}</p>
-					{allocationSummary && <p class="text-sm text-slate-600">{allocationSummary}</p>}
-					<p class="text-sm text-slate-600">
-						Próxima cuota #{nextPendingInstallment.installment_number} · vence{' '}
-						{formatDate(nextPendingInstallment.due_date)}
-					</p>
-					<p class="text-sm text-slate-600">Monto: {formatCurrency(nextPendingInstallment.amount)}</p>
-					<p class="text-sm text-slate-600">
-						Quedan {pendingInstallmentsCount} cuota{pendingInstallmentsCount === 1 ? '' : 's'} pendiente
-						{pendingInstallmentsCount === 1 ? '' : 's'}.
-					</p>
-					<p class="text-sm text-amber-700">Estado: pendiente</p>
-					<form method="post" action="/api/installments/mark-paid" class="mt-2">
+				<li class="rounded-lg border border-slate-100 bg-slate-50 p-4">
+					<div class="mb-3 flex items-start justify-between">
+						<div>
+							<p class="font-medium text-[#1A1A1A]">{purchaseName}</p>
+							{allocationSummary && <p class="mt-0.5 text-sm font-medium text-[#1A1A1A]/60">{allocationSummary}</p>}
+						</div>
+						<span class="rounded-full bg-[#DF9F28]/20 px-3 py-1 text-xs font-semibold text-[#0F2C59]">
+							{pendingInstallmentsCount} pendiente{pendingInstallmentsCount === 1 ? '' : 's'}
+						</span>
+					</div>
+					<div class="mb-3 grid gap-1 text-sm font-medium text-[#1A1A1A]/70">
+						<p>Próxima cuota: <span class="font-semibold text-[#1A1A1A]">#{nextPendingInstallment.installment_number}</span> · vence <span class="font-semibold text-[#1A1A1A]">{formatDate(nextPendingInstallment.due_date)}</span></p>
+						<p>Monto: <span class="font-semibold text-[#1A1A1A]">{formatCurrency(nextPendingInstallment.amount)}</span></p>
+					</div>
+					<form method="post" action="/api/installments/mark-paid">
 						<input type="hidden" name="installment_id" value={nextPendingInstallment.id} />
-						<button type="submit">Marcar próxima cuota como pagada</button>
+						<button type="submit" class="cursor-pointer rounded-lg bg-[#DF9F28] px-4 py-2 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Marcar como pagada</button>
 					</form>
 				</li>
 				)

@@ -10,28 +10,36 @@ const success = Astro.url.searchParams.get('success');
 ---
 
 <Layout title="Login | Cuoting">
-	<section class="mx-auto max-w-md space-y-6 rounded-lg bg-white p-6 shadow-sm">
-		<h1 class="text-2xl font-semibold">Ingresá a Cuoting</h1>
-		<p class="text-sm text-slate-600">Usamos Supabase Auth con email y contraseña.</p>
+	<div class="mb-6 pt-4 text-center">
+		<h1 class="text-3xl font-bold text-[#0F2C59]">Cuoting</h1>
+		<p class="text-sm font-medium text-[#1A1A1A]/60">Claridad financiera en cuotas</p>
+	</div>
+	<section class="mx-auto max-w-md space-y-6 rounded-lg bg-white p-8 shadow-sm">
+		<h2 class="text-xl font-semibold text-[#1A1A1A]">Ingresá</h2>
 
-		{error && <p class="rounded-md bg-red-100 p-2 text-sm text-red-700">{error}</p>}
-		{success && <p class="rounded-md bg-green-100 p-2 text-sm text-green-700">{success}</p>}
+		{error && <p class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+		{success && <p class="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p>}
 
 		<form method="post" action="/api/auth/login" class="space-y-4">
 			<label class="block space-y-1">
-				<span class="text-sm font-medium">Email</span>
-				<input type="email" name="email" required />
+				<span class="text-sm font-medium text-[#1A1A1A]/70">Email</span>
+				<input type="email" name="email" required class="w-full" />
 			</label>
 			<label class="block space-y-1">
-				<span class="text-sm font-medium">Contraseña</span>
-				<input type="password" name="password" required />
+				<span class="text-sm font-medium text-[#1A1A1A]/70">Contraseña</span>
+				<input type="password" name="password" required class="w-full" />
 			</label>
-			<button type="submit" class="w-full">Entrar</button>
+			<button type="submit" class="w-full cursor-pointer rounded-lg bg-[#DF9F28] px-5 py-2.5 text-sm font-semibold text-[#0F2C59] hover:bg-[#C88A1E]">Entrar</button>
 		</form>
 
-		<p class="text-sm text-slate-600">
-			¿No tenés cuenta?
-			<a class="font-medium text-slate-900 underline" href="/register">Creala acá</a>
-		</p>
+
+		<div class="flex item-center justify-between text-sm font-medium text-[#1A1A1A]/60">
+			<p class="text-sm font-medium text-[#1A1A1A]/60">
+				¿No tenés cuenta?
+				<a class="font-semibold text-[#0F2C59] hover:text-[#1A3A6B] underline" href="/register">Creala acá</a>
+			</p>
+			<span class="text-sm font-semibold text-[#0F2c59]">Property: BaldegonDev - 2026</span>
+		</div>
+
 	</section>
 </Layout>

@@ -1,11 +1,19 @@
 @import "tailwindcss";
 
-input,
-select,
-button {
-  @apply rounded-md border border-slate-300 px-3 py-2 text-sm;
+body {
+  @apply bg-[#F5F0EB] text-[#1A1A1A] antialiased;
 }
 
-button {
-  @apply cursor-pointer bg-slate-900 text-white hover:bg-slate-700;
+input,
+select {
+  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-[#1A1A1A] placeholder-slate-400 transition-colors duration-150;
+}
+
+input:focus,
+select:focus {
+  @apply border-[#DF9F28] ring-2 ring-[#DF9F28]/30 outline-none;
+}
+
+a[role="button"] {
+  @apply inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors duration-150;
 }

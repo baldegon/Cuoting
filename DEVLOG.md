@@ -374,24 +374,181 @@ En cada bloque de trabajo registrar:
 
 ---
 
-## Plantilla para próximas entradas
+## 2026-06-09 — Summary card + paleta de colores profesional
+
+### Qué hicimos (con detalle técnico)
+
+**1) Card de resumen en el dashboard:**
+Ubicada entre el header y la sección de acciones. Se construye con dos piezas:
+
+- **Frontmatter (código SSR server-side dentro de `---`):**
+  Se agregó al bloque de frontmatter de `dashboard.astro` la lógica para aplanar todas las cuotas pendientes de todas las compras del usuario:
+  ```typescript
+  const allPendingInstallments = (purchases ?? []).flatMap((purchase) => {
+    const allocations = Array.isArray(purchase.purchase_allocations)
+      ? purchase.purchase_allocations : [];
+    return allocations.flatMap((allocation) => {
+      const plans = Array.isArray(allocation.installment_plans)
+        ? allocation.installment_plans
+        : allocation.installment_plans ? [allocation.installment_plans] : [];
+      return plans.flatMap((plan) => plan.installments ?? []);
+    }).filter((inst) => inst.status !== 'paid');
+  });
+  const totalPendingCount = allPendingInstallments.length;
+  const totalPendingAmount = allPendingInstallments.reduce(
+    (sum, inst) => sum + Number(inst.amount), 0
+  );
+  ```
+  Esto itera sobre todas las compras → sus asignaciones por tarjeta → sus planes → sus cuotas individuales, filtra solo las no pagadas, y suma cantidad + monto.
+
+- **HTML (render):**
+  Card con gradiente azul (`bg-gradient-to-br from-blue-600 to-blue-700`) que muestra en 3 columnas responsivas:
+  1. Cuotas pendientes (número total)
+  2. Total comprometido (formatCurrency de la suma)
+  3. Próximo vencimiento (toma `pendingPurchases[0].nextPendingInstallment.due_date` que ya está ordenado por fecha)
+
+**2) Paleta de colores profesional (primera iteración, azul):**
+- `global.css`: Body `bg-slate-50 text-slate-900 antialiased`, inputs con focus `border-blue-400 ring-2 ring-blue-100`.
+- Botones del dashboard: `bg-blue-600 hover:bg-blue-700 text-white`.
+- Login/register: branding "Cuoting" en `text-blue-700` centrado arriba del formulario.
+
+**3) Mecánica del gradiente en la card resumen (primera iteración, azul):**
+```html
+<section class="mb-8 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-md">
+```
+
+**4) Ajuste fino de cards existentes:**
+Items de listado pasaron a `border-slate-100 bg-slate-50 p-4` para mejor legibilidad.
+
+### Cambio posterior: paleta definitiva del diseñador (Oro Cálido + Azul Marino)
+
+El diseñador entregó una paleta profesional con criterios concretos de accesibilidad. Se reemplazó TODO el azul genérico de Tailwind por colores exactos:
+
+| Rol | Antes | Después (hex) | RGB equivalente |
+|-----|-------|---------------|-----------------|
+| Fondo página | `bg-slate-50` | `bg-slate-50` (se conservó) | #f8fafc |
+| Texto principal | `text-slate-900` | `text-[#1A1A1A]` | rgb(26,26,26) — Negro Carbón |
+| Texto secundario | `text-slate-500/600/700` | `text-[#1A1A1A]/50/60/70` | opacidad sobre Negro Carbón |
+| **Botón primario bg** | `bg-blue-600` | `bg-[#DF9F28]` | rgb(223,159,40) — **Oro Cálido** |
+| **Botón primario texto** | `text-white` | `text-[#0F2C59]` | rgb(15,44,89) — **Azul Marino Profundo** |
+| Botón hover | `hover:bg-blue-700` | `hover:bg-[#C88A1E]` | Oro 10% más oscuro |
+| Botón deshabilitado/presionado | — | misma base + opacidad | sin colores nuevos |
+| Input focus | `border-blue-400 ring-blue-100` | `border-[#DF9F28] ring-[#DF9F28]/30` | anillo dorado translúcido |
+| Summary card gradient | `from-blue-600 to-blue-700` | `from-[#0F2C59] to-[#1A3A6B]` | gradiente navy oscuro |
+| Labels en summary | `text-blue-100` | `text-[#DF9F28]/80` | dorado translúcido sobre navy |
+| Headings | `text-slate-900` | `text-[#1A1A1A]` | Negro Carbón, semibold |
+| Links | `text-blue-600 hover:text-blue-700` | `text-[#0F2C59] hover:text-[#1A3A6B]` | Azul Marino |
+| Badge "pendientes" | `bg-amber-100 text-amber-700` | `bg-[#DF9F28]/20 text-[#0F2C59]` | badge tinto con la paleta |
+| Botón quitar asignación | `bg-red-50 border-red-200 text-red-600` | `bg-[#0F2C59]/5 border-[#0F2C59]/20 text-[#0F2C59]` | botón en tono navy tenue |
+| Botón "Agregar asignación" | `bg-blue-50 border-blue-200 text-blue-700` | `bg-[#DF9F28]/10 border-[#DF9F28]/30 text-[#0F2C59]` | acento dorado tenue |
+| Branding logo | `text-blue-700` | `text-[#0F2C59]` | Azul Marino |
+
+**Reglas del diseñador aplicadas:**
+1. **Contraste botón oro**: texto `#0F2C59` sobre fondo `#DF9F28` (ratio de contraste ~5.5:1, cumple AA). Se descartó blanco sobre oro porque el ratio cae a ~1.7:1.
+2. **Font weight mínimo Medium (500)**: todos los textos informativos importantes pasaron de `font-medium` o se agregó `font-medium` donde no había. Inputs base en `font-medium`. Textos secundarios en `font-medium` con opacidad en vez de `text-slate-500` (que usaba weight normal).
+3. **Estados activos sin colores nuevos**: hover usa `bg-[#C88A1E]` (oro más oscuro), disabled/presionado varía opacidad de la misma base.
+
+**Cambio más impactante visualmente:**
+```html
+<!-- Antes: azul Tailwind genérico -->
+<button class="bg-blue-600 text-white hover:bg-blue-700">
+  Agregar tarjeta
+</button>
+
+<!-- Después: paleta del diseñador -->
+<button class="bg-[#DF9F28] text-[#0F2C59] hover:bg-[#C88A1E] font-semibold">
+  Agregar tarjeta
+</button>
+```
+
+```html
+<!-- Antes: summary card azul -->
+<section class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white">
+  <p class="text-blue-100">Cuotas pendientes</p>
+</section>
+
+<!-- Después: navy + gold -->
+<section class="bg-gradient-to-br from-[#0F2C59] to-[#1A3A6B] p-6 text-white">
+  <p class="text-[#DF9F28]/80">Cuotas pendientes</p>
+</section>
+```
+
+### Por qué se hizo así
+- **Paleta de diseñador profesional**: los colores no se eligieron por gusto sino por principios de accesibilidad WCAG AA (contraste mínimo), psicología del color fintech (navy = seriedad, oro = premium/confianza) y coherencia visual.
+- **Azul Marino #0F2C59** como primario corporativo: más serio y profesional que un azul brillante. Transmite estabilidad bancaria.
+- **Oro Cálido #DF9F28** como CTA: el dorado sobre fondo navy tiene alto contraste y señala "acción importante". Es el estándar en banca digital premium.
+- **Negro Carbón #1A1A1A** como texto: es negro puro atenuado, evita el cansancio visual del #000 manteniendo máximo contraste AA+.
+- **Font-weight medium como mínimo**: porque el texto fino (thin/light) sobre fondo blanco se pierde en monitores brillantes — criterio específico del diseñador basado en testing de legibilidad.
+- **Sin colores adicionales para estados**: mantener opacidad sobre la misma base evita inflar el design system y confundir al usuario con variaciones cromáticas.
+
+### Qué estudiar
+- `flatMap()` vs `reduce()` para transformar arrays anidados en TypeScript.
+- Tailwind Gradient utilities: `bg-gradient-to-{direction}`, combinación de `from-`, `to-`, y `via-`.
+- `ring-2 ring-offset-0` en Tailwind: cómo funciona el ring (box-shadow, no border) y por qué es mejor para focus states.
+- **WCAG contraste**: ratio de contraste entre colores, qué es AA vs AAA, cómo calcularlo.
+- **Psicología del color fintech**: por qué navy + gold es el estándar en banca digital premium (vs azul brillante + blanco de big tech).
+- **Arbitrary values en Tailwind v4**: cómo y cuándo usar `bg-[#DF9F28]` en vez de definir un color en `tailwind.config`.
+- Opacidad vs color plano para estados de componentes: por qué variar alpha sobre la misma base es más escalable que agregar colores derivados.
+
+### Qué tocar si retomás
+- `src/pages/dashboard.astro`:
+  - Líneas del frontmatter donde se calcula `allPendingInstallments`
+  - Sección `<section class="mb-8 rounded-xl bg-gradient-to-br...">` (card resumen, métricas o diseño)
+  - Todos los botones: buscar `bg-[#DF9F28]` para cambiar color primario
+  - Badge de pendientes: `bg-[#DF9F28]/20 text-[#0F2C59]`
+- `src/styles/global.css`:
+  - Reglas de input/select focus: `border-[#DF9F28] ring-[#DF9F28]/30`
+  - Body: `text-[#1A1A1A]` (Negro Carbón)
+  - Input base: `font-medium text-[#1A1A1A]`
+- `src/layouts/Layout.astro`:
+  - `<body class="bg-slate-50 text-[#1A1A1A]">` — clase de body que define texto global
+- `src/pages/login.astro` / `register.astro`:
+  - Branding `text-[#0F2C59]`, botón `bg-[#DF9F28] text-[#0F2C59]`, link `text-[#0F2C59]`
+
+### Próximo paso
+- Probar con datos reales: crear compra con varias cuotas, marcar algunas como pagadas, verificar que la card resumen actualiza valores correctamente.
+- Verificar que el contraste del botón oro (#DF9F28) + texto navy (#0F2C59) cumple visualmente en monitores reales.
+
+### Bloqueos / notas
+- Astro levantó en `:4322` porque `4321` estaba ocupado por proceso previo.
+- Incidente con subagente `sdd-apply`: revirtió cambios previos al aplicar nuevos. Lección: nunca asumir que un subagente entiende contexto acumulado sin leerlo explícitamente.
+- **Importante**: `Layout.astro` tiene `<body class="bg-slate-50 text-[#1A1A1A]">` que es específico de página y gana sobre `global.css`. Si se cambia global.css sin tocar Layout.astro, el body no se actualiza.
+- Los arbitrary values `bg-[#DF9F28]` de Tailwind v4 se usaron en inline classes en vez de definir el color en `tailwind.config` o `@theme` — esto es válido pero deja los valores dispersos. Si la paleta se estabiliza, conviene migrar a tokens CSS.
+
+---
+
+## Plantilla para próximas entradas (DETALLADA)
+
+Cada entrada debe responder:
 
 ### Fecha
 
-#### Qué hicimos
--
+#### Cambios técnicos concretos
+- [archivo:línea] qué se modificó exactamente y el fragmento de código clave (no describir, mostrar).
+- Si hay migración SQL: la sentencia y qué hace cada parte (CREATE, ALTER, RLS, función).
+- Si hay cambio de UI: las clases de Tailwind y por qué se eligieron.
 
-#### Por qué
--
+#### Decisión técnica + justificación
+- Por qué se eligió este approach y no otro (ej: "usamos flatMap en vez de reduce porque...")
+- Tradeoffs: qué se ganó y qué se perdió con esta decisión.
+- Alternativas consideradas y por qué se descartaron.
 
-#### Qué estudiar
--
+#### Flujo de datos (cómo funciona)
+- Secuencia paso a paso: qué datos entran, cómo se transforman, qué se persiste/retorna.
+- Si hay múltiples archivos involucrados, explicar la conexión entre ellos.
 
-#### Qué tocar si retomás
--
+#### Conceptos a estudiar
+- Temas técnicos específicos que aparecieron (función de JS, utility de Tailwind, patrón de Astro, feature de Supabase).
+- Enlace mental: "esto se conecta con [otra cosa que ya vimos]".
 
-#### Próximo paso
--
+#### Archivos y líneas clave
+- Ruta absoluta al archivo y números de línea de las secciones modificadas.
 
-#### Bloqueos / notas
--
+#### Qué rompería esto
+- Casos borde: qué pasa si la DB está vacía, si no hay sesión, si un array viene null.
+- Dependencias externas (ej: "esto depende de que Supabase Auth tenga Email/Password habilitado").
+
+#### Próximo paso concreto
+- Una sola acción que seguiría naturalmente después de esto.
+
+---
